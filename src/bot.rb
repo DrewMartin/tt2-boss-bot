@@ -1,10 +1,10 @@
 require 'discordrb'
 require 'dotenv'
 require_relative 'boss_timer'
-
 Dotenv.load
 
 PREFIX = '!'
+Discordrb::LOGGER.debug = true
 
 bot = Discordrb::Commands::CommandBot.new({
   token: ENV['BOT_TOKEN'],
