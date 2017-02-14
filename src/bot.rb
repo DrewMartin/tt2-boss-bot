@@ -5,6 +5,7 @@ require_relative 'boss_timer'
 Dotenv.load
 
 PREFIX = '!'
+puts("BOT_TOKEN #{ENV['BOT_TOKEN']} CLIENT_ID #{ENV['CLIENT_ID']} BOSS_CHANNEL_ID #{ENV['BOSS_CHANNEL_ID'].to_i}")
 
 bot = Discordrb::Commands::CommandBot.new({
   token: ENV['BOT_TOKEN'],
