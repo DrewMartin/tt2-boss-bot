@@ -1,6 +1,7 @@
 require 'discordrb'
 require 'dotenv'
 require_relative 'boss_timer'
+
 Dotenv.load
 
 PREFIX = '!'
