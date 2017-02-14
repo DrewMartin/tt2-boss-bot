@@ -5,7 +5,6 @@ require_relative 'boss_timer'
 Dotenv.load
 
 PREFIX = '!'
-puts("BOT_TOKEN #{ENV['BOT_TOKEN']} CLIENT_ID #{ENV['CLIENT_ID']} BOSS_CHANNEL_ID #{ENV['BOSS_CHANNEL_ID'].to_i}")
 
 bot = Discordrb::Commands::CommandBot.new({
   token: ENV['BOT_TOKEN'],
@@ -14,18 +13,9 @@ bot = Discordrb::Commands::CommandBot.new({
   channels: [ENV['BOSS_CHANNEL_ID'].to_i],
 })
 
-
-
 boss_timer = BossTimer.new(bot)
 
 bot.bucket :boss, limit: 10, time_span: 30, delay: 2
-
-# bot.command(:help, bucket: :boss) do |event|
-#   event << "```js"
-#   event << "'what' - the fuck"
-#   event << "'is' - this shit"
-#   event << "```"
-# end
 
 bot.command(:kill,
   description: "Marks the boss as killed and starts a new timer",

@@ -6,6 +6,7 @@ class BossTimer
   def initialize(bot)
     @bot = bot
     @channel = bot.channel(ENV['BOSS_CHANNEL_ID'].to_i)
+    @channel.send_message("I'm alive")
   end
 
   def run
