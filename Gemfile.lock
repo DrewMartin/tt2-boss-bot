@@ -11,6 +11,7 @@ GEM
       rest-client
     domain_name (0.5.20161129)
       unf (>= 0.0.5, < 1.0.0)
+    dotenv (2.2.0)
     event_emitter (0.2.5)
     ffi (1.9.17)
     http-cookie (1.0.3)
@@ -40,6 +41,7 @@ PLATFORMS
 
 DEPENDENCIES
   discordrb (~> 3.2, >= 3.2.0.1)
+  dotenv
 
 RUBY VERSION
    ruby 2.3.3p222
