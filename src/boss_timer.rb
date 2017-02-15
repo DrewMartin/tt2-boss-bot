@@ -2,7 +2,7 @@ class BossTimer
   NEXT_BOSS_KEY = 'next_boss'
 
   SUFFIXES = %w(K M B T)
-  ALERT_TIMES = [10 * 60, 2 * 60, 1 * 60].freeze
+  ALERT_TIMES = [30 * 60, 10 * 60, 2 * 60, 1 * 60].freeze
   BOSS_DELAY = 6 * 60 * 60
   HISTORY_SIZE = 10
 
