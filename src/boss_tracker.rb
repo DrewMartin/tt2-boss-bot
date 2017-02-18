@@ -2,9 +2,18 @@ class BossTracker
   NEXT_BOSS_KEY = 'next_boss'
 
   SUFFIXES = %w(K M B T aa ab ac ad ae)
-  ALERT_TIMES = [30 * 60, 10 * 60, 2 * 60, 1 * 60].freeze
+  ALERT_TIMES = [15 * 60, 5 * 60, 2 * 60].freeze
   BOSS_DELAY = 6 * 60 * 60
+  UPDATE_DELAY = 2
   HISTORY_SIZE = 10
+
+  attr_reader :channel,
+              :level,
+              :history,
+              :bot,
+              :next_boss_at,
+              :boss_message,
+              :alert_times
 
   def initialize(bot)
     @bot = bot
@@ -13,25 +22,29 @@ class BossTracker
     @history = []
   end
 
-  def run
-    loop do
-      boss_tick
-      sleep 2
+  def tick
+    return unless next_boss_at && next_boss_at > Time.now
+
+    if boss_message
+      update_boss_message
+    else
+      create_boss_message
     end
   end
 
-  def kill(event)
-    set_level(event, level + 1) if level
-    record_boss_kill(Time.now)
-    set_next_boss_time(time(second: BOSS_DELAY))
-    print_lass_boss_kill_time
-    clear_boss_message
+  def set_level(level)
+    @level = level
+    print_level
   end
 
-  def set_next(event, time_struct)
+  def print_level
+    channel.send_message(clan_bonus_message)
+  end
+
+  def set_next(time_struct)
     if next_boss_at && next_boss_at < Time.now
       record_boss_kill(Time.now + time(time_struct) - BOSS_DELAY)
-      set_level(event, level + 1) if level
+      set_level(level + 1) if level
       print_lass_boss_kill_time
     else
       record_boss_kill(Time.now + time(time_struct) - BOSS_DELAY, replace_last: true)
@@ -40,25 +53,23 @@ class BossTracker
     set_next_boss_time(time(time_struct))
   end
 
-  def print_lass_boss_kill_time(with_level: true)
-    return unless history.size > 1
-    boss_time = (history[-1] - history[-2] - BOSS_DELAY).round
-    channel.send_message("Boss killed in #{time_delta_string(boss_time)}.")
+  def kill
+    if next_boss_at && next_boss_at > Time.now
+      channel.send_message("You're not fighting a boss yet")
+      return
+    end
+    set_level(level + 1) if level
+    record_boss_kill(Time.now)
+    set_next_boss_time(time(second: BOSS_DELAY))
+    print_lass_boss_kill_time
+    clear_boss_message
   end
 
-  def set_level(event, level)
-    @level = level
-    print_level(event)
-  end
+  def print_history
+    return channel.send_message("No history recorded") if history.size < 2
 
-  def print_level(event)
-    event << clan_bonus_message
-  end
-
-  def print_history(event)
-    return event << "No history recorded" if history.size < 2
-
-    event << '```js'
+    message = []
+    message << '```js'
     history.each.with_index do |time, i|
       next if i == 0
       boss_num = if level
@@ -67,32 +78,26 @@ class BossTracker
         i
       end
       boss_time = (time - history[i-1] - BOSS_DELAY).round
-      event << "Boss %3d - #{time_delta_string(boss_time)}" % boss_num
+      message << "Boss %3d - #{time_delta_string(boss_time)}" % boss_num
     end
-    event << '```'
+    message << '```'
+    channel.send_message(message.join("\n"))
   end
 
-  def print_timer(event)
+  def print_timer
     if next_boss_at
       if next_boss_at > Time.now
         create_boss_message
       else
-        event << "Boss fight in progress"
+        channel.send_message("Boss fight in progress")
       end
     else
-      event << "Next boss time is unknown."
+      channel.send_message("Next boss time is unknown.")
     end
     return
   end
 
   private
-  attr_reader :bot,
-              :next_boss_at,
-              :channel,
-              :boss_message,
-              :alert_times,
-              :level,
-              :history
 
   def time(hour: 0, minute: 0, second: 0)
     (hour * 60 + minute) * 60 + second
@@ -157,17 +162,10 @@ class BossTracker
     @next_boss_at = Time.now.utc + seconds
   end
 
-  def boss_tick
-    return unless next_boss_at && next_boss_at > Time.now
-
-    if boss_message
-      update_boss_message
-    else
-      create_boss_message
-    end
-  end
-
   def update_boss_message
+    now = Time.now
+    return if @last_updated_at && @last_updated_at + UPDATE_DELAY > now
+    @last_updated_at = now
     boss_message.edit(generate_boss_message)
     boss_alert_channel
   end
@@ -182,17 +180,12 @@ class BossTracker
     end
     return unless next_alert
 
-    minutes = next_alert / 60
     channel.send_message("@everyone Next boss in #{etl_string(next_boss_at)}")
   end
 
   def create_boss_message
-    # Clear old pins
-    old_pins = channel.pins.select do |m|
-      m.author.current_bot? && m.content =~ /\ANext boss in/
-    end
-
-    old_pins.each(&:unpin)
+    # Clear old pinned message
+    boss_message&.unpin
 
     @boss_message = channel.send_message(generate_boss_message)
     @boss_message.pin
@@ -217,5 +210,11 @@ class BossTracker
       history.push(killed_at)
       @history = history.last(HISTORY_SIZE + 1) if history.size > HISTORY_SIZE + 1
     end
+  end
+
+  def print_lass_boss_kill_time(with_level: true)
+    return unless history.size > 1
+    boss_time = (history[-1] - history[-2] - BOSS_DELAY).round
+    channel.send_message("Boss killed in #{time_delta_string(boss_time)}.")
   end
 end

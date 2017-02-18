@@ -85,15 +85,15 @@ class BossTrackerBot
     event << '```'
   end
 
-  def kill(event, _)
-    boss_tracker.kill(event)
+  def kill(*)
+    boss_tracker.kill
   end
 
   def next(event, args)
     parsed_time = parse_time(args)
 
     if parsed_time
-      boss_tracker.set_next(event, parsed_time)
+      boss_tracker.set_next(parsed_time)
       event << "Boss time updated"
     else
       event << "Incorrect params. Correct usage is:"
@@ -101,8 +101,8 @@ class BossTrackerBot
     end
   end
 
-  def history(event, _)
-    boss_tracker.print_history(event)
+  def history(*)
+    boss_tracker.print_history
   end
 
   def level(event, args)
@@ -112,15 +112,15 @@ class BossTrackerBot
       if curr_level < MIN_LEVEL || curr_level > MAX_LEVEL
         event << "Given level must be a valid number"
       else
-        boss_tracker.set_level(event, curr_level)
+        boss_tracker.set_level(curr_level)
       end
     else
-      boss_tracker.print_level(event)
+      boss_tracker.print_level
     end
   end
 
-  def timer(event, _)
-    boss_tracker.print_timer(event)
+  def timer(*)
+    boss_tracker.print_timer
   end
 
   #### UTILITY ####
@@ -153,7 +153,10 @@ class BossTrackerBot
     Thread.new do
       loop do
         begin
-          boss_tracker.run
+          loop do
+            boss_tracker.tick
+            sleep 0.5
+          end
         rescue => e
           puts("Uncaught exception: #{e}")
         end
