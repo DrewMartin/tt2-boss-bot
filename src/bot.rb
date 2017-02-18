@@ -18,6 +18,20 @@ boss_tracker = BossTracker.new(bot)
 bot.bucket :boss, limit: 10, time_span: 30, delay: 2
 
 args = {
+  description: "Get you some help",
+  bucket: :boss
+}
+bot.command(:help, args) do |event|
+  event << '```js'
+  event << "#{PREFIX}kill    - Marks the boss as killed and starts a new timer"
+  event << "#{PREFIX}next    - Sets the next boss time. Usage: '#{PREFIX}next 5:15:12'"
+  event << "#{PREFIX}history - Displays the kill history"
+  event << "#{PREFIX}level   - Get and set the current boss level"
+  event << "#{PREFIX}timer   - Display the next boss time"
+  event << '```'
+end
+
+args = {
   description: "Marks the boss as killed and starts a new timer",
   bucket: :boss
 }
@@ -74,7 +88,7 @@ bot.command(:level, args) do |event, level|
 end
 
 args = {
-  description: "Print the next boss time",
+  description: "Display the next boss time",
   bucket: :boss
 }
 bot.command(:timer, args) do |event|

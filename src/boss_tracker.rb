@@ -24,9 +24,7 @@ class BossTracker
     set_level(event, level + 1) if level
     record_boss_kill(Time.now)
     set_next_boss_time(time(second: BOSS_DELAY))
-    if history.size > 1
-      last_kill_time = 1
-    end
+    print_lass_boss_kill_time
     clear_boss_message
   end
 
@@ -34,10 +32,18 @@ class BossTracker
     if next_boss_at && next_boss_at < Time.now
       record_boss_kill(Time.now + time(time_struct) - BOSS_DELAY)
       set_level(event, level + 1) if level
+      print_lass_boss_kill_time
     else
       record_boss_kill(Time.now + time(time_struct) - BOSS_DELAY, replace_last: true)
+      print_lass_boss_kill_time(with_level: false)
     end
     set_next_boss_time(time(time_struct))
+  end
+
+  def print_lass_boss_kill_time(with_level: true)
+    return unless history.size > 1
+    boss_time = (history[-1] - history[-2] - BOSS_DELAY).round
+    channel.send_message("Boss killed in #{time_delta_string(boss_time)}.")
   end
 
   def set_level(event, level)
@@ -46,7 +52,7 @@ class BossTracker
   end
 
   def print_level(event)
-    event << boss_bonus_message
+    event << clan_bonus_message
   end
 
   def print_history(event)
@@ -99,19 +105,19 @@ class BossTracker
 
   def time_delta_string(delta)
     strings = []
-    strings.unshift "%2ds" % (delta % 60)
+    strings.unshift "%ds" % (delta % 60)
     delta /= 60
 
     if delta > 0
-      strings.unshift "%2dm" % (delta % 60)
+      strings.unshift "%dm" % (delta % 60)
       delta /= 60
       strings.unshift "#{delta}h" if delta > 0
     end
 
-    strings.join(' ')
+    strings.join(' ').strip
   end
 
-  def boss_bonus_message
+  def clan_bonus_message
     return "Clan level is unknown" unless level
     "Clan level is #{level} with a bonus of #{boss_bonus_string}"
   end
