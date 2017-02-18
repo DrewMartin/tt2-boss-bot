@@ -1,7 +1,7 @@
-class BossTimer
+class BossTracker
   NEXT_BOSS_KEY = 'next_boss'
 
-  SUFFIXES = %w(K M B T)
+  SUFFIXES = %w(K M B T aa ab ac ad ae)
   ALERT_TIMES = [30 * 60, 10 * 60, 2 * 60, 1 * 60].freeze
   BOSS_DELAY = 6 * 60 * 60
   HISTORY_SIZE = 10
@@ -24,6 +24,9 @@ class BossTimer
     set_level(event, level + 1) if level
     record_boss_kill(Time.now)
     set_next_boss_time(time(second: BOSS_DELAY))
+    if history.size > 1
+      last_kill_time = 1
+    end
     clear_boss_message
   end
 
@@ -31,7 +34,7 @@ class BossTimer
     if next_boss_at && next_boss_at < Time.now
       record_boss_kill(Time.now + time(time_struct) - BOSS_DELAY)
       set_level(event, level + 1) if level
-    elsif !history.empty?
+    else
       record_boss_kill(Time.now + time(time_struct) - BOSS_DELAY, replace_last: true)
     end
     set_next_boss_time(time(time_struct))
@@ -52,11 +55,28 @@ class BossTimer
     event << '```js'
     history.each.with_index do |time, i|
       next if i == 0
-      boss_num = level - history.size + i
+      boss_num = if level
+        level - history.size + i
+      else
+        i
+      end
       boss_time = (time - history[i-1] - BOSS_DELAY).round
       event << "Boss %3d - #{time_delta_string(boss_time)}" % boss_num
     end
     event << '```'
+  end
+
+  def print_timer(event)
+    if next_boss_at
+      if next_boss_at > Time.now
+        create_boss_message
+      else
+        event << "Boss fight in progress"
+      end
+    else
+      event << "Next boss time is unknown."
+    end
+    return
   end
 
   private
@@ -99,13 +119,14 @@ class BossTimer
   def boss_bonus_string
     return "unknown" unless level
 
+    level_calc = level
     bonus = 1
-    if level > 200
-      bonus *= 1.05 ** (level - 200)
-      level = 200
+    if level_calc > 200
+      bonus *= 1.05 ** (level_calc - 200)
+      level_calc = 200
     end
 
-    bonus *= 1.1 ** level
+    bonus *= 1.1 ** level_calc
     bonus -= 1
     bonus *= 100
 

@@ -1,8 +1,5 @@
 require 'discordrb'
-require 'dotenv'
-require_relative 'boss_timer'
-
-Dotenv.load
+require_relative 'boss_tracker'
 
 PREFIX = ENV['PREFIX'] || '!'
 MIN_LEVEL = 1
@@ -14,8 +11,9 @@ bot = Discordrb::Commands::CommandBot.new({
   prefix: PREFIX,
   channels: [ENV['BOSS_CHANNEL_ID'].to_i],
 })
-puts bot.invite_url
-boss_timer = BossTimer.new(bot)
+
+puts("Invite at #{bot.invite_url}")
+boss_tracker = BossTracker.new(bot)
 
 bot.bucket :boss, limit: 10, time_span: 30, delay: 2
 
@@ -24,10 +22,10 @@ args = {
   bucket: :boss
 }
 bot.command(:kill, args) do |event|
-  boss_timer.kill(event)
+  boss_tracker.kill(event)
 end
 
-set_next_usage = '[##h] [##m] ##s   (eg: "5h 25m 15s" or "50s")'
+set_next_usage = 'h:mm:ss   (eg: "4:15:23" or "21:15")'
 args = {
   min_args: 1,
   max_args: 3,
@@ -35,11 +33,11 @@ args = {
   usage: set_next_usage,
   bucket: :boss
 }
-bot.command(:set_next, args) do |event, *args|
+bot.command(:next, args) do |event, *args|
   parsed_time = parse_time(args)
 
   if parsed_time
-    boss_timer.set_next(event, parsed_time)
+    boss_tracker.set_next(event, parsed_time)
     event << "Boss time updated"
   else
     event << "Incorrect params. Correct usage is:"
@@ -52,7 +50,7 @@ args = {
   bucket: :boss
 }
 bot.command(:history, args) do |event|
-  boss_timer.print_history(event)
+  boss_tracker.print_history(event)
 end
 
 args = {
@@ -68,24 +66,43 @@ bot.command(:level, args) do |event, level|
     if level < MIN_LEVEL || level > MAX_LEVEL
       event << "Given level must be a valid number"
     else
-      boss_timer.set_level(event, level)
+      boss_tracker.set_level(event, level)
     end
   else
-    boss_timer.print_level(event)
+    boss_tracker.print_level(event)
   end
 end
 
-TIME_REGEX = /\A(?:(?<h>\d)h)?(?:(?<m>\d{1,2})m)?(?:(?<s>\d{1,2})s)?\z/
+args = {
+  description: "Print the next boss time",
+  bucket: :boss
+}
+bot.command(:timer, args) do |event|
+  boss_tracker.print_timer(event)
+end
+
+TIME_REGEX = /
+  \A
+  (?:
+    (?:(?<h>\d)h)?           # match 5h 15m 23s format
+    (?:(?<m>\d{1,2})m)?
+    (?:(?<s>\d{1,2})s)
+  |
+    (?:(?<h>\d)[\.:])?       # match 5:15:23 format
+    (?:(?<m>\d{1,2})[\.:])?
+    (?:(?<s>\d{1,2}))
+  )
+  \z
+/x
 
 def parse_time(time_array)
   match = TIME_REGEX.match(time_array.join.gsub(/\s/, ''))
   return unless match
-  return unless match[:h] || match[:m] || match[:s]
 
   result = {}
   result[:hour] = match[:h].to_i if match[:h]
   result[:minute] = match[:m].to_i if match[:m]
-  result[:second] = match[:s].to_i if match[:s]
+  result[:second] = match[:s].to_i
 
   result
 end
@@ -93,7 +110,7 @@ end
 Thread.new do
   loop do
     begin
-      boss_timer.run
+      boss_tracker.run
     rescue => e
       puts("Uncaught exception: #{e}")
     end
