@@ -77,8 +77,8 @@ class BossTrackerBot
     event << '```js'
     l = COMMANDS.keys.map(&:size).max
 
-    COMMANDS.each do |command, args|
-      next if command == :help || !args[:description]
+    COMMANDS.except(:help).each do |command, args|
+      next if !args[:description]
 
       event << "#{PREFIX}%-#{l}s - #{args[:description]}" % command
     end
@@ -136,13 +136,7 @@ class BossTrackerBot
   def parse_time(time_array)
     match = TIME_REGEX.match(time_array.join.gsub(/\s/, ''))
     return unless match
-
-    result = {}
-    result[:hour] = match[:h].to_i if match[:h]
-    result[:minute] = match[:m].to_i if match[:m]
-    result[:second] = match[:s].to_i
-
-    result
+    match[:h].to_i.hours + match[:m].to_i.minutes + match[:s].to_i.seconds
   end
 
   def default_options

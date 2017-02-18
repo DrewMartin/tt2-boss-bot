@@ -2,9 +2,9 @@ class BossTracker
   NEXT_BOSS_KEY = 'next_boss'
 
   SUFFIXES = %w(K M B T aa ab ac ad ae)
-  ALERT_TIMES = [15 * 60, 5 * 60, 2 * 60].freeze
-  BOSS_DELAY = 6 * 60 * 60
-  UPDATE_DELAY = 2
+  ALERT_TIMES = [15.minutes, 5.minutes, 2.minutes].freeze
+  BOSS_DELAY = 6.hours
+  UPDATE_DELAY = 2.seconds
   HISTORY_SIZE = 10
 
   attr_reader :channel,
@@ -41,16 +41,16 @@ class BossTracker
     channel.send_message(clan_bonus_message)
   end
 
-  def set_next(time_struct)
+  def set_next(seconds)
     if next_boss_at && next_boss_at < Time.now
-      record_boss_kill(Time.now + time(time_struct) - BOSS_DELAY)
+      record_boss_kill(Time.now + seconds - BOSS_DELAY)
       set_level(level + 1) if level
       print_lass_boss_kill_time
     else
-      record_boss_kill(Time.now + time(time_struct) - BOSS_DELAY, replace_last: true)
+      record_boss_kill(Time.now + seconds - BOSS_DELAY, replace_last: true)
       print_lass_boss_kill_time(with_level: false)
     end
-    set_next_boss_time(time(time_struct))
+    set_next_boss_time(seconds)
   end
 
   def kill
@@ -60,7 +60,7 @@ class BossTracker
     end
     set_level(level + 1) if level
     record_boss_kill(Time.now)
-    set_next_boss_time(time(second: BOSS_DELAY))
+    set_next_boss_time(BOSS_DELAY)
     print_lass_boss_kill_time
     clear_boss_message
   end
@@ -98,10 +98,6 @@ class BossTracker
   end
 
   private
-
-  def time(hour: 0, minute: 0, second: 0)
-    (hour * 60 + minute) * 60 + second
-  end
 
   def etl_string(time)
     delta = (time - Time.now).to_i

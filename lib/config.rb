@@ -1,4 +1,6 @@
 require 'dotenv'
+require 'active_support'
+require 'active_support/core_ext'
 
 if ENV['TEST']
   Dotenv.load('.env.test', '.env.test.local')
