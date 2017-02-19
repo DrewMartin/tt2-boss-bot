@@ -86,14 +86,19 @@ class BossTrackerTest < ActiveSupport::TestCase
   end
 
   test "#set_level updates the last boss kill's level" do
-    kill = @boss_tracker.clan.boss_kills.create(killed_at: Time.now - 5.hours)
+    @boss_tracker.clan.boss_kills.create(killed_at: Time.now - 15.hours, level: 1)
+    @boss_tracker.clan.boss_kills.create(killed_at: Time.now - 9.hours + 5.minutes, level: 2)
+    @boss_tracker.clan.boss_kills.create(killed_at: Time.now - 3.hours + 15.minutes, level: 3)
+
+    assert_equal [1, 2, 3], @boss_tracker.clan.boss_kills.map(&:level)
+
     @boss_tracker.set_level(50)
 
-    assert_equal 49, kill.reload.level
+    assert_equal [1, 2, 49], @boss_tracker.clan.boss_kills.map(&:level)
 
     @boss_tracker.set_level(123)
 
-    assert_equal 122, kill.reload.level
+    assert_equal [1, 2, 122], @boss_tracker.clan.boss_kills.map(&:level)
   end
 
   test "#print_level sends unknown level message if the level is not set" do
@@ -143,6 +148,43 @@ class BossTrackerTest < ActiveSupport::TestCase
       assert_equal_history([last_death_at])
       assert_equal next_boss_at, @boss_tracker.next_boss_at
     end
+  end
+
+  test "#set_next with multiple kill records correctly updates the latest" do
+    expected_history = []
+    @boss_tracker.set_level(10)
+
+    # boss killed at 0:00:10
+    Timecop.freeze(Time.new(2017, 2, 15, 6)) do
+      @boss_tracker.set_next(10.seconds)
+    end
+    expected_history << Time.new(2017, 2, 15, 0, 0, 10)
+    assert_equal_history(expected_history)
+    assert_equal [9], @boss_tracker.clan.boss_kills.map(&:level)
+
+    # boss killed at 6:00:30
+    Timecop.freeze(Time.new(2017, 2, 15, 6, 0, 40)) { @boss_tracker.set_next(BossTracker::BOSS_DELAY - 10.seconds) }
+    expected_history << Time.new(2017, 2, 15, 6, 0, 30)
+    assert_equal_history(expected_history)
+    assert_equal [9, 10], @boss_tracker.clan.boss_kills.map(&:level)
+
+    # oops boss killed at 6:01:20 actually
+    Timecop.freeze(Time.new(2017, 2, 15, 6, 1, 40)) { @boss_tracker.set_next(BossTracker::BOSS_DELAY - 20.seconds) }
+    expected_history[1] = Time.new(2017, 2, 15, 6, 1, 20)
+    assert_equal_history(expected_history)
+    assert_equal [9, 10], @boss_tracker.clan.boss_kills.map(&:level)
+
+    # boss killed at 12:02:30
+    Timecop.freeze(Time.new(2017, 2, 15, 12, 3, 40)) { @boss_tracker.set_next(BossTracker::BOSS_DELAY - 1.minute - 10.seconds) }
+    expected_history << Time.new(2017, 2, 15, 12, 2, 30)
+    assert_equal_history(expected_history)
+    assert_equal [9, 10, 11], @boss_tracker.clan.boss_kills.map(&:level)
+
+    # oops boss killed at 12:02:28
+    Timecop.freeze(Time.new(2017, 2, 15, 12, 4, 50)) { @boss_tracker.set_next(BossTracker::BOSS_DELAY - 2.minutes - 22.seconds) }
+    expected_history[2] = Time.new(2017, 2, 15, 12, 2, 28)
+    assert_equal_history(expected_history)
+    assert_equal [9, 10, 11], @boss_tracker.clan.boss_kills.map(&:level)
   end
 
   test "#set_next with a past boss time treats it as a kill" do
@@ -257,19 +299,39 @@ class BossTrackerTest < ActiveSupport::TestCase
   end
 
   test "#print_history displays the current boss history" do
-    now = Time.now
     @boss_tracker.set_level(150)
+    expected_history = []
 
-    Timecop.freeze(now) { @boss_tracker.set_next(10.seconds) }
-    Timecop.freeze(now += 2.minutes + 30.seconds) { @boss_tracker.kill }
-    Timecop.freeze(now += BossTracker::BOSS_DELAY + 1.hour + 3.minutes + 50.seconds) { @boss_tracker.kill }
-    Timecop.freeze(now += BossTracker::BOSS_DELAY + 15.seconds) { @boss_tracker.kill }
+    Timecop.freeze(Time.new(2017, 2, 15, 5, 59, 50)) { @boss_tracker.set_next(10.seconds) }
+    expected_history << Time.new(2017, 2, 15)
+    assert_equal_history(expected_history)
+
+    # killed in 2 minutes 20 seconds
+    Timecop.freeze(Time.new(2017, 2, 15, 6, 2, 20)) { @boss_tracker.kill }
+    expected_history << Time.new(2017, 2, 15, 6, 2, 20)
+    assert_equal_history(expected_history)
+
+    # killed in 1h 3m 50s
+    Timecop.freeze(Time.new(2017, 2, 15, 13, 5, 50)) { @boss_tracker.kill }
+    expected_history << Time.new(2017, 2, 15, 13, 5, 50)
+    assert_equal_history(expected_history)
+
+    # oops boss was actually killed in 1h 2m 5s
+    Timecop.freeze(Time.new(2017, 2, 15, 13, 6, 30)) { @boss_tracker.set_next(BossTracker::BOSS_DELAY - 2.minutes - 5.seconds) }
+    expected_history.pop
+    expected_history << Time.new(2017, 2, 15, 13, 4, 25)
+    assert_equal_history(expected_history)
+
+    # killed in 30s
+    Timecop.freeze(Time.new(2017, 2, 15, 19, 5, 25)) { @boss_tracker.set_next(BossTracker::BOSS_DELAY - 30.seconds) }
+    expected_history << Time.new(2017, 2, 15, 19, 4, 55)
+    assert_equal_history(expected_history)
 
     expected_msg = [
       '```js',
       'Boss 150 - 2m 20s',
-      'Boss 151 - 1h 3m 50s',
-      'Boss 152 - 15s',
+      'Boss 151 - 1h 2m 5s',
+      'Boss 152 - 30s',
       '```'
     ].join("\n")
     expect_message(expected_msg)
@@ -445,9 +507,9 @@ class BossTrackerTest < ActiveSupport::TestCase
 
   private
 
-  def assert_equal_history(times)
+  def assert_equal_history(expected_times)
     history = @boss_tracker.clan.boss_kills.map {|k| k.killed_at.to_time.to_s}
-    assert_equal times.map(&:to_s), history
+    assert_equal expected_times.map(&:to_s), history
   end
 
   def generate_bot_message(text)

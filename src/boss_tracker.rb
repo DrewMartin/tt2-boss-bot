@@ -40,7 +40,7 @@ class BossTracker
 
   def set_level(level)
     update_level(level)
-    if (kill = clan.boss_kills.first) && kill.level != level - 1
+    if (kill = clan.boss_kills.last) && kill.level != level - 1
       kill.update(level: level - 1)
     end
   end
@@ -51,7 +51,7 @@ class BossTracker
 
   def set_next(seconds)
     if next_boss_at && next_boss_at < Time.now
-      set_level(level + 1) if level
+      increment_level
       record_boss_kill(Time.now + seconds - BOSS_DELAY)
       print_lass_boss_kill_time
     else
@@ -66,7 +66,7 @@ class BossTracker
       channel.send_message("You're not fighting a boss yet")
       return
     end
-    set_level(level + 1) if level
+    increment_level
     record_boss_kill(Time.now)
     set_next_boss_time(BOSS_DELAY)
     print_lass_boss_kill_time
@@ -217,11 +217,9 @@ class BossTracker
   end
 
   def record_boss_kill(killed_at, replace_last: false)
-    kill_record = if replace_last
-      clan.boss_kills.first_or_new
-    else
-      clan.boss_kills.new(killed_at: killed_at)
-    end
+    kill_record = nil
+    kill_record = clan.boss_kills.last if replace_last
+    kill_record ||= clan.boss_kills.new
 
     kill_record.killed_at = killed_at
     kill_record.level = level - 1 if level
