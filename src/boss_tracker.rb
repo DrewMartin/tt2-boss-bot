@@ -1,3 +1,7 @@
+require_relative 'clan'
+require_relative 'boss_kill'
+DataMapper.auto_upgrade!
+
 class BossTracker
   NEXT_BOSS_KEY = 'next_boss'
 
@@ -5,21 +9,23 @@ class BossTracker
   ALERT_TIMES = [15.minutes, 5.minutes, 2.minutes].freeze
   BOSS_DELAY = 6.hours
   UPDATE_DELAY = 2.seconds
-  HISTORY_SIZE = 10
 
   attr_reader :channel,
               :level,
-              :history,
               :bot,
               :next_boss_at,
               :boss_message,
-              :alert_times
+              :alert_times,
+              :clan
 
   def initialize(bot)
     @bot = bot
-    @channel = bot.channel(ENV['BOSS_CHANNEL_ID'].to_i)
+    channel = ENV['BOSS_CHANNEL_ID']
+    @channel = bot.channel(channel)
+    @clan = Clan.first_or_create(channel_id: channel)
+    load_from_clan if clan.saved?
+
     @channel.send_message("I'm alive")
-    @history = []
   end
 
   def tick
@@ -33,8 +39,10 @@ class BossTracker
   end
 
   def set_level(level)
-    @level = level
-    print_level
+    update_level(level)
+    if (kill = clan.boss_kills.first) && kill.level != level - 1
+      kill.update(level: level - 1)
+    end
   end
 
   def print_level
@@ -43,8 +51,8 @@ class BossTracker
 
   def set_next(seconds)
     if next_boss_at && next_boss_at < Time.now
-      record_boss_kill(Time.now + seconds - BOSS_DELAY)
       set_level(level + 1) if level
+      record_boss_kill(Time.now + seconds - BOSS_DELAY)
       print_lass_boss_kill_time
     else
       record_boss_kill(Time.now + seconds - BOSS_DELAY, replace_last: true)
@@ -66,18 +74,15 @@ class BossTracker
   end
 
   def print_history
+    history = clan.kill_history.reverse
     return channel.send_message("No history recorded") if history.size < 2
 
     message = []
     message << '```js'
-    history.each.with_index do |time, i|
+    history.each.with_index do |kill, i|
       next if i == 0
-      boss_num = if level
-        level - history.size + i
-      else
-        i
-      end
-      boss_time = (time - history[i-1] - BOSS_DELAY).round
+      boss_num = kill.level || i
+      boss_time = (kill.killed_at.to_i - history[i-1].killed_at.to_i - BOSS_DELAY).round
       message << "Boss %3d - #{time_delta_string(boss_time)}" % boss_num
     end
     message << '```'
@@ -98,6 +103,15 @@ class BossTracker
   end
 
   private
+
+  def load_from_clan
+    if clan.boss_message_id
+      Discordrb::API::Channel.unpin_message(bot.token, channel.id, clan.boss_message_id)
+    end
+
+    @next_boss_at = clan.next_boss.to_time if clan.next_boss
+    @level = clan.level if clan.level
+  end
 
   def etl_string(time)
     delta = (time - Time.now).to_i
@@ -155,7 +169,8 @@ class BossTracker
 
   def set_next_boss_time(seconds)
     clear_boss_message
-    @next_boss_at = Time.now.utc + seconds
+    @next_boss_at = Time.now + seconds
+    clan.update(next_boss: @next_boss_at)
   end
 
   def update_boss_message
@@ -180,18 +195,21 @@ class BossTracker
   end
 
   def create_boss_message
-    # Clear old pinned message
     boss_message&.unpin
 
     @boss_message = channel.send_message(generate_boss_message)
     @boss_message.pin
-    @alert_times = ALERT_TIMES.dup
+    clan.update(boss_message_id: @boss_message.id)
+
+    time_to_boss = next_boss_at - Time.now
+    @alert_times = ALERT_TIMES.select { |t| t < time_to_boss || t == ALERT_TIMES.last }
   end
 
   def clear_boss_message
     return unless boss_message
     boss_message.unpin
     @boss_message = nil
+    clan.update(boss_message_id: nil)
   end
 
   def generate_boss_message
@@ -199,18 +217,33 @@ class BossTracker
   end
 
   def record_boss_kill(killed_at, replace_last: false)
-    if replace_last
-      history.pop
-      history.push(killed_at)
+    kill_record = if replace_last
+      clan.boss_kills.first_or_new
     else
-      history.push(killed_at)
-      @history = history.last(HISTORY_SIZE + 1) if history.size > HISTORY_SIZE + 1
+      clan.boss_kills.new(killed_at: killed_at)
     end
+
+    kill_record.killed_at = killed_at
+    kill_record.level = level - 1 if level
+    kill_record.save
   end
 
   def print_lass_boss_kill_time(with_level: true)
+    history = clan.boss_kills.all(limit: 2)
     return unless history.size > 1
-    boss_time = (history[-1] - history[-2] - BOSS_DELAY).round
+    boss_time = (history[0].killed_at.to_i - history[1].killed_at.to_i - BOSS_DELAY).round
     channel.send_message("Boss killed in #{time_delta_string(boss_time)}.")
   end
+
+  def increment_level
+    return unless level
+    update_level(level + 1)
+  end
+
+  def update_level(level)
+    @level = level
+    clan.update(level: level)
+    print_level
+  end
+
 end

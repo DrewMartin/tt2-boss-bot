@@ -97,7 +97,7 @@ class BossTrackerBot
       event << "Boss time updated"
     else
       event << "Incorrect params. Correct usage is:"
-      event << "`#{set_next_usage}`"
+      event << "`#{COMMANDS[:next][:usage]}`"
     end
   end
 
@@ -128,7 +128,13 @@ class BossTrackerBot
   def setup_commands
     COMMANDS.each do |command, options|
       bot.command(command, options.merge(default_options)) do |event, *args|
-        send(command, event, args)
+        begin
+          send(command, event, args)
+        rescue DataMapper::SaveFailureError => e
+          event << "Something went wrong"
+          DataMapper.logger.warn("#{e.inspect}")
+          DataMapper.logger.warn("#{e.resource.errors.full_messages}") if e&.resource&.errors&.full_messages
+        end
       end
     end
   end
@@ -152,7 +158,9 @@ class BossTrackerBot
             sleep 0.5
           end
         rescue => e
-          puts("Uncaught exception: #{e}")
+          boss_tracker.channel&.send_message("Something went wrong")
+          DataMapper.logger.warn("Uncaught exception: #{e}")
+          puts e.backtrace
         end
       end
     end
@@ -163,7 +171,9 @@ class BossTrackerBot
       begin
         bot.run
       rescue => e
+        boss_tracker.channel&.send_message("Something went wrong")
         puts("Uncaught exception: #{e}")
+        puts e.backtrace
       end
     end
   end

@@ -2,23 +2,27 @@ require "test_helper"
 require_relative "../../src/boss_tracker"
 
 class FakeMessage
-  attr_accessor :content
-  attr_accessor :author
+  attr_reader :content, :id, :author
 
-  def initialize(content)
-    self.content = content
+  def initialize(content:, id:, author:)
+    @content = content
+    @id = id
+    @author = author
   end
 
   def pin; end
   def unpin; end
-  def edit; end
+
+  def edit(text)
+    @content = content
+  end
 end
 
 class FakeChannel
-  attr_reader :channel_id
+  attr_reader :id
 
-  def initialize(channel_id)
-    @channel_id = channel_id
+  def initialize(id)
+    @id = id
   end
 
   def send_message(message)
@@ -26,6 +30,12 @@ class FakeChannel
 end
 
 class FakeBot
+  attr_reader :token
+
+  def initialize(token)
+    @token = token
+  end
+
   def channel(channel_id)
     FakeChannel.new(channel_id)
   end
@@ -36,16 +46,34 @@ class FakeBot
 end
 
 class BossTrackerTest < ActiveSupport::TestCase
+  include UsingDb
+
   setup do
-    @bot = FakeBot.new
+    @bot = FakeBot.new('fake')
     @boss_tracker = BossTracker.new(@bot)
   end
 
   test "during setup message sent to channel" do
     channel = FakeChannel.new(123456)
-    @bot.expects(:channel).with(ENV['BOSS_CHANNEL_ID'].to_i).returns(channel)
+    @bot.expects(:channel).with(ENV['BOSS_CHANNEL_ID']).returns(channel)
     channel.expects(:send_message).with("I'm alive")
     BossTracker.new(@bot)
+  end
+
+  test "during setup the old boss message is unpinned" do
+    Clan.update(boss_message_id: 'asdf')
+    Discordrb::API::Channel.expects(:unpin_message).with('fake', ENV['BOSS_CHANNEL_ID'], 'asdf')
+
+    BossTracker.new(@bot)
+  end
+
+  test "during setup level and next_boss time are loaded from the db" do
+    now = Time.now
+    Clan.update(next_boss: now, level: 147)
+
+    boss_tracker = BossTracker.new(@bot)
+    assert_equal 147, boss_tracker.level
+    assert_equal now.to_s, boss_tracker.next_boss_at.to_time.to_s
   end
 
   test "#set_level updates the clan level and prints it" do
@@ -54,6 +82,18 @@ class BossTrackerTest < ActiveSupport::TestCase
     @boss_tracker.set_level(50)
 
     assert_equal 50, @boss_tracker.level
+    assert_equal 50, Clan.first.level
+  end
+
+  test "#set_level updates the last boss kill's level" do
+    kill = @boss_tracker.clan.boss_kills.create(killed_at: Time.now - 5.hours)
+    @boss_tracker.set_level(50)
+
+    assert_equal 49, kill.reload.level
+
+    @boss_tracker.set_level(123)
+
+    assert_equal 122, kill.reload.level
   end
 
   test "#print_level sends unknown level message if the level is not set" do
@@ -72,16 +112,16 @@ class BossTrackerTest < ActiveSupport::TestCase
     @boss_tracker.print_level
   end
 
-  test "#set_next without a boss time sets one and updates history" do
+  test "#set_next without a boss time sets one and updates kill history" do
     assert_nil @boss_tracker.next_boss_at
-    assert_equal [], @boss_tracker.history
+    assert_equal 0, @boss_tracker.clan.boss_kills.size
 
     Timecop.freeze do
       delta = 3.hours + 15.minutes + 12.seconds
       @boss_tracker.set_next(delta)
       next_boss_at = Time.now + delta
       last_death_at = next_boss_at - BossTracker::BOSS_DELAY
-      assert_equal [last_death_at], @boss_tracker.history
+      assert_equal_history([last_death_at])
       assert_equal next_boss_at, @boss_tracker.next_boss_at
     end
   end
@@ -93,14 +133,14 @@ class BossTrackerTest < ActiveSupport::TestCase
 
       next_boss_at = Time.now + delta
       last_death_at = next_boss_at - BossTracker::BOSS_DELAY
-      assert_equal [last_death_at], @boss_tracker.history
+      assert_equal_history([last_death_at])
       assert_equal next_boss_at, @boss_tracker.next_boss_at
 
       delta = 2.hours + 45.minutes + 32.seconds
       @boss_tracker.set_next(delta)
       next_boss_at = Time.now + delta
       last_death_at = next_boss_at - BossTracker::BOSS_DELAY
-      assert_equal [last_death_at], @boss_tracker.history
+      assert_equal_history([last_death_at])
       assert_equal next_boss_at, @boss_tracker.next_boss_at
     end
   end
@@ -112,7 +152,7 @@ class BossTrackerTest < ActiveSupport::TestCase
       expected_history << now - BossTracker::BOSS_DELAY + 12.seconds
       @boss_tracker.set_next(12.seconds)
 
-      assert_equal expected_history, @boss_tracker.history
+      assert_equal_history(expected_history)
     end
 
     Timecop.freeze(now + 2.minutes) do
@@ -122,7 +162,7 @@ class BossTrackerTest < ActiveSupport::TestCase
       @boss_tracker.set_next(BossTracker::BOSS_DELAY - 20.seconds)
 
       expected_history << Time.now - 20.seconds
-      assert_equal expected_history, @boss_tracker.history
+      assert_equal_history(expected_history)
     end
   end
 
@@ -135,7 +175,7 @@ class BossTrackerTest < ActiveSupport::TestCase
       expected_history << now - BossTracker::BOSS_DELAY + 12.seconds
       @boss_tracker.set_next(12.seconds)
 
-      assert_equal expected_history, @boss_tracker.history
+      assert_equal_history(expected_history)
     end
 
     Timecop.freeze(now + 2.minutes) do
@@ -146,7 +186,7 @@ class BossTrackerTest < ActiveSupport::TestCase
       @boss_tracker.set_next(BossTracker::BOSS_DELAY - 20.seconds)
 
       expected_history << Time.now - 20.seconds
-      assert_equal expected_history, @boss_tracker.history
+      assert_equal_history(expected_history)
       assert_equal 11, @boss_tracker.level
     end
   end
@@ -159,7 +199,7 @@ class BossTrackerTest < ActiveSupport::TestCase
   end
 
   test "#kill increments level then prints it and updates history and next boss time" do
-    assert_equal [], @boss_tracker.history
+    assert_equal 0, @boss_tracker.clan.boss_kills.size
     assert_nil @boss_tracker.next_boss_at
     @boss_tracker.set_level(5)
 
@@ -170,7 +210,7 @@ class BossTrackerTest < ActiveSupport::TestCase
       @boss_tracker.kill
 
       assert_equal 6, @boss_tracker.level
-      assert_equal [Time.now], @boss_tracker.history
+      assert_equal_history([Time.now])
       assert_equal Time.now + BossTracker::BOSS_DELAY, @boss_tracker.next_boss_at
     end
   end
@@ -190,7 +230,7 @@ class BossTrackerTest < ActiveSupport::TestCase
       @boss_tracker.kill
 
       expected_history << Time.now
-      assert_equal expected_history, @boss_tracker.history
+      assert_equal_history(expected_history)
     end
   end
 
@@ -203,7 +243,7 @@ class BossTrackerTest < ActiveSupport::TestCase
       expect_message("You're not fighting a boss yet")
       @boss_tracker.kill
 
-      assert_equal [now - BossTracker::BOSS_DELAY + 12.seconds], @boss_tracker.history
+      assert_equal_history([now - BossTracker::BOSS_DELAY + 12.seconds])
       assert_equal 150, @boss_tracker.level
     end
   end
@@ -219,6 +259,7 @@ class BossTrackerTest < ActiveSupport::TestCase
   test "#print_history displays the current boss history" do
     now = Time.now
     @boss_tracker.set_level(150)
+
     Timecop.freeze(now) { @boss_tracker.set_next(10.seconds) }
     Timecop.freeze(now += 2.minutes + 30.seconds) { @boss_tracker.kill }
     Timecop.freeze(now += BossTracker::BOSS_DELAY + 1.hour + 3.minutes + 50.seconds) { @boss_tracker.kill }
@@ -404,10 +445,14 @@ class BossTrackerTest < ActiveSupport::TestCase
 
   private
 
+  def assert_equal_history(times)
+    history = @boss_tracker.clan.boss_kills.map {|k| k.killed_at.to_time.to_s}
+    assert_equal times.map(&:to_s), history
+  end
+
   def generate_bot_message(text)
-    message = FakeMessage.new(text)
-    message.author = @bot
-    message
+    id = (Random.rand * 1**32).round
+    FakeMessage.new(content: text, author: @bot, id: id.to_s)
   end
 
   def expect_message(text, message: nil)

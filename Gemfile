@@ -5,6 +5,8 @@ gem 'activesupport'
 gem 'dotenv'
 gem 'discordrb', '~> 3.2', '>= 3.2.0.1'
 gem 'rake'
+gem 'data_mapper'
+gem 'dm-postgres-adapter'
 
 group :development, :test do
   gem 'byebug'
