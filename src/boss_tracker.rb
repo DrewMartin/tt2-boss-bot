@@ -9,6 +9,14 @@ class BossTracker
   ALERT_TIMES = [15.minutes, 5.minutes, 2.minutes].freeze
   BOSS_DELAY = 6.hours
   UPDATE_DELAY = 2.seconds
+  CHIRP_DELAY = 5.minutes
+  PREFIX = ENV['PREFIX'] || '!'
+  CHIRPS = [
+    "What the hell? It's taking you %s to beat the boss??",
+    "Ok surely someone forgot to tell me the boss is dead right? It's been %s. Use '#{PREFIX}kill' or '#{PREFIX}next H:MM:SS' to let me know it's dead.",
+    "Ok this is just sad. It's been %s and the boss is still alive.",
+    "@everyone should be ashamed of themselves. %s and the boss is still alive."
+  ].freeze
 
   attr_reader :channel,
               :level,
@@ -28,13 +36,37 @@ class BossTracker
     @channel.send_message("I'm alive")
   end
 
-  def tick
-    return unless next_boss_at && next_boss_at > Time.now
+  def reload
+    @clan = Clan.first(channel_id: @channel.id)
+    load_from_clan
+    @boss_message = nil
+    @next_chirp_at = nil
+    @chirp_index = 0
+  end
 
-    if boss_message
+  def tick
+    return unless next_boss_at
+
+    if next_boss_at < Time.now
+      chirp
+    elsif boss_message
       update_boss_message
     else
       create_boss_message
+    end
+  end
+
+  def chirp
+    if @next_chirp_at.nil?
+      @next_chirp_at = next_boss_at + CHIRP_DELAY
+      @chirp_index = 0
+    end
+
+    if @next_chirp_at <= Time.now
+      @next_chirp_at = Time.now + CHIRP_DELAY
+      message = CHIRPS[@chirp_index] % time_delta_string(Time.now.to_i - next_boss_at.to_i)
+      channel.send_message(message)
+      @chirp_index = (@chirp_index + 1) % CHIRPS.size
     end
   end
 
@@ -105,6 +137,7 @@ class BossTracker
   private
 
   def load_from_clan
+    return unless clan.saved?
     if clan.boss_message_id
       Discordrb::API::Channel.unpin_message(bot.token, channel.id, clan.boss_message_id)
     end
@@ -203,6 +236,7 @@ class BossTracker
 
     time_to_boss = next_boss_at - Time.now
     @alert_times = ALERT_TIMES.select { |t| t < time_to_boss || t == ALERT_TIMES.last }
+    @next_chirp_at = nil
   end
 
   def clear_boss_message

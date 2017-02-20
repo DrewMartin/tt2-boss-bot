@@ -12,8 +12,8 @@ COMMANDS = {
   next: {
     min_args: 1,
     max_args: 3,
-    description: "Sets the next boss time. Usage: '#{PREFIX}next 5:15:12'",
-    usage: 'h:mm:ss   (eg: "4:15:23" or "21:15")'
+    description: "Sets the next boss time. Usage: '#{PREFIX}next H:MM:SS'",
+    usage: 'H:MM:SS   (eg: "4:15:23" or "21:15")'
   },
   history: {
     description: "Show the kill history"
@@ -26,7 +26,8 @@ COMMANDS = {
   },
   timer: {
     description: "Display the next boss time"
-  }
+  },
+  reload: {}
 }
 
 class BossTrackerBot
@@ -123,6 +124,13 @@ class BossTrackerBot
     boss_tracker.print_timer
   end
 
+  def reload(event, *)
+    return unless ENV['SUPERUSER_ID'] && ENV['SUPERUSER_ID'] == event.user.id.to_s
+    boss_tracker.reload
+    event << "Ok"
+    return unless true
+  end
+
   #### UTILITY ####
 
   def setup_commands
@@ -130,6 +138,7 @@ class BossTrackerBot
       bot.command(command, options.merge(default_options)) do |event, *args|
         begin
           send(command, event, args)
+          nil
         rescue DataMapper::SaveFailureError => e
           event << "Something went wrong"
           DataMapper.logger.warn("#{e.inspect}")
