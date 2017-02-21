@@ -17,6 +17,6 @@ class Clan
   end
 
   def kill_history
-    boss_kills.all(limit: HISTORY_SIZE + 1)
+    boss_kills.all(limit: HISTORY_SIZE + 1).to_a
   end
 end
