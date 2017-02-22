@@ -8,7 +8,7 @@ class BossTracker
   SUFFIXES = %w(K M B T aa ab ac ad ae)
   ALERT_TIMES = [15.minutes, 5.minutes, 2.minutes].freeze
   BOSS_DELAY = 6.hours
-  UPDATE_DELAY = 2.seconds
+  UPDATE_DELAY = 4.seconds
   CHIRP_DELAY = 5.minutes
   PREFIX = ENV['PREFIX'] || '!'
   CHIRPS = [
