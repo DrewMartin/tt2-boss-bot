@@ -88,6 +88,7 @@ class BossTracker
       print_lass_boss_kill_time
     else
       record_boss_kill(Time.now + seconds - BOSS_DELAY, replace_last: true)
+      reload
       print_lass_boss_kill_time(with_level: false)
     end
     set_next_boss_time(seconds)
