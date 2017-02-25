@@ -9,7 +9,7 @@ class Clan
   property :boss_message_id,  String    # Discord id of the current pinned boss messsage
   property :channel_id,       String, required: true, unique: true # Discord id of the channel to watch/talk in
 
-  has n, :boss_kills, order: [:id.desc]
+  has n, :boss_kills
 
   def initialize(*args)
     @level = @next_boss = @channel_id = @id = @boss_message_id = nil
@@ -17,6 +17,6 @@ class Clan
   end
 
   def kill_history
-    boss_kills.all(limit: HISTORY_SIZE + 1).to_a
+    boss_kills.all(limit: HISTORY_SIZE + 1, order: [:id.desc]).to_a
   end
 end

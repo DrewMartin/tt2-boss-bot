@@ -552,7 +552,7 @@ class BossTrackerTest < ActiveSupport::TestCase
   private
 
   def assert_equal_history(expected_times)
-    history = @boss_tracker.clan.boss_kills.map {|k| k.killed_at.to_time.to_s}
+    history = @boss_tracker.clan.boss_kills.all(order: [:id.asc]).map {|k| k.killed_at.to_time.to_s}
     assert_equal expected_times.map(&:to_s), history
   end
 

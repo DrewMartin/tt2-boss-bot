@@ -262,7 +262,7 @@ class BossTracker
   end
 
   def print_lass_boss_kill_time(with_level: true)
-    history = clan.boss_kills.all(limit: 2)
+    history = clan.boss_kills.all(order: [:id.desc], limit: 2)
     return unless history.size > 1
     boss_time = (history[0].killed_at.to_i - history[1].killed_at.to_i - BOSS_DELAY).round
     channel.send_message("Boss killed in #{time_delta_string(boss_time)}.")
