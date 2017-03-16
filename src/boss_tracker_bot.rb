@@ -167,7 +167,6 @@ class BossTrackerBot
             sleep 0.5
           end
         rescue => e
-          boss_tracker.channel&.send_message("Something went wrong")
           DataMapper.logger.warn("Uncaught exception: #{e}")
           puts e.backtrace
         end
@@ -180,7 +179,6 @@ class BossTrackerBot
       begin
         bot.run
       rescue => e
-        boss_tracker.channel&.send_message("Something went wrong")
         puts("Uncaught exception: #{e}")
         puts e.backtrace
       end
