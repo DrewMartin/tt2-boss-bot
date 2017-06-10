@@ -62,7 +62,17 @@ class BossTrackerBot
     setup_commands
 
     puts("Invite at #{bot.invite_url}")
-    @boss_tracker = BossTracker.new(bot)
+    loop do
+      begin
+        @boss_tracker = BossTracker.new(bot)
+      rescue StandardException
+        puts("Exception during startup: #{e}")
+        puts e.backtrace
+        sleep 10
+      else
+        break
+      end
+    end
   end
 
   def run
