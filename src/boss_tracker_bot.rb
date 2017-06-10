@@ -65,7 +65,7 @@ class BossTrackerBot
     loop do
       begin
         @boss_tracker = BossTracker.new(bot)
-      rescue StandardException
+      rescue StandardError => e
         puts("Exception during startup: #{e}")
         puts e.backtrace
         sleep 10
