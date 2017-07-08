@@ -9,7 +9,7 @@ class BossTracker
   ALERT_TIMES = [15.minutes, 5.minutes, 2.minutes].freeze
   BOSS_DELAY = 6.hours
   UPDATE_DELAY = 4.seconds
-  CHIRP_DELAY = 5.minutes
+  CHIRP_DELAY = 1.hour
   PREFIX = ENV['PREFIX'] || '!'
   CHIRPS = [
     "What the hell? It's taking you %s to beat the boss??",

@@ -509,44 +509,44 @@ class BossTrackerTest < ActiveSupport::TestCase
     i = 0
     Timecop.freeze(Time.new(2017, 2, 15, 0)) { @boss_tracker.set_next(1.hour) }
 
-    expect_message(BossTracker::CHIRPS[i] % "10m 0s")
+    expect_message(BossTracker::CHIRPS[i] % "1h 0m 0s")
     i = (i + 1) % BossTracker::CHIRPS.size
-    Timecop.freeze(Time.new(2017, 2, 15, 1, 10)) { @boss_tracker.tick }
+    Timecop.freeze(Time.new(2017, 2, 15, 2)) { @boss_tracker.tick }
 
-    expect_message(BossTracker::CHIRPS[i] % "20m 0s")
+    expect_message(BossTracker::CHIRPS[i] % "2h 0m 0s")
     i = (i + 1) % BossTracker::CHIRPS.size
-    Timecop.freeze(Time.new(2017, 2, 15, 1, 20)) { @boss_tracker.tick }
+    Timecop.freeze(Time.new(2017, 2, 15, 3)) { @boss_tracker.tick }
 
-    expect_message(BossTracker::CHIRPS[i] % "26m 15s")
+    expect_message(BossTracker::CHIRPS[i] % "4h 12m 15s")
     i = (i + 1) % BossTracker::CHIRPS.size
-    Timecop.freeze(Time.new(2017, 2, 15, 1, 26, 15)) { @boss_tracker.tick }
+    Timecop.freeze(Time.new(2017, 2, 15, 5, 12, 15)) { @boss_tracker.tick }
 
     @boss_tracker.channel.expects(:send_message).never
-    Timecop.freeze(Time.new(2017, 2, 15, 1, 27, 15)) { @boss_tracker.tick }
+    Timecop.freeze(Time.new(2017, 2, 15, 5, 27, 15)) { @boss_tracker.tick }
 
-    expect_message(BossTracker::CHIRPS[i] % "35m 25s")
+    expect_message(BossTracker::CHIRPS[i] % "5h 35m 25s")
     i = (i + 1) % BossTracker::CHIRPS.size
-    Timecop.freeze(Time.new(2017, 2, 15, 1, 35, 25)) { @boss_tracker.tick }
+    Timecop.freeze(Time.new(2017, 2, 15, 6, 35, 25)) { @boss_tracker.tick }
 
-    expect_message(BossTracker::CHIRPS[i] % "1h 5m 0s")
-    Timecop.freeze(Time.new(2017, 2, 15, 2, 5)) { @boss_tracker.tick }
+    expect_message(BossTracker::CHIRPS[i] % "6h 36m 0s")
+    Timecop.freeze(Time.new(2017, 2, 15, 7, 36)) { @boss_tracker.tick }
 
     # boss is killed, start it alllll over
-    expect_message('Boss killed in 1h 5m 20s.')
-    Timecop.freeze(Time.new(2017, 2, 15, 2, 5, 20)) { @boss_tracker.kill }
+    expect_message('Boss killed in 6h 36m 20s.')
+    Timecop.freeze(Time.new(2017, 2, 15, 7, 36, 20)) { @boss_tracker.kill }
 
     message = generate_bot_message('Next boss in 5h 59m 0s')
     message.expects(:pin)
     expect_message(message.content).returns(message)
-    Timecop.freeze(Time.new(2017, 2, 15, 2, 6, 20)) { @boss_tracker.tick }
+    Timecop.freeze(Time.new(2017, 2, 15, 7, 37, 20)) { @boss_tracker.tick }
 
     i = 0
-    expect_message(BossTracker::CHIRPS[i] % "5m 0s")
+    expect_message(BossTracker::CHIRPS[i] % "1h 1m 0s")
     i = (i + 1) % BossTracker::CHIRPS.size
-    Timecop.freeze(Time.new(2017, 2, 15, 8, 10, 20)) { @boss_tracker.tick }
+    Timecop.freeze(Time.new(2017, 2, 15, 14, 37, 20)) { @boss_tracker.tick }
 
-    expect_message(BossTracker::CHIRPS[i] % "20m 19s")
-    Timecop.freeze(Time.new(2017, 2, 15, 8, 25, 39)) { @boss_tracker.tick }
+    expect_message(BossTracker::CHIRPS[i] % "2h 20m 19s")
+    Timecop.freeze(Time.new(2017, 2, 15, 15, 56, 39)) { @boss_tracker.tick }
   end
 
   private
