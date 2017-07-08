@@ -140,7 +140,11 @@ class BossTracker
   def load_from_clan
     return unless clan.saved?
     if clan.boss_message_id
-      Discordrb::API::Channel.unpin_message(bot.token, channel.id, clan.boss_message_id)
+      begin
+        Discordrb::API::Channel.unpin_message(bot.token, channel.id, clan.boss_message_id)
+      rescue StandardError => e
+        puts("Exception unpinning boss message: #{e}")
+      end
     end
 
     @next_boss_at = clan.next_boss.to_time if clan.next_boss
@@ -228,8 +232,15 @@ class BossTracker
     channel.send_message("@everyone Next boss in #{etl_string(next_boss_at)}")
   end
 
+  def unpin_boss_message
+    return unless boss_message
+    boss_message.unpin
+  rescue StandardError => e
+    puts("Exception unpinning boss message: #{e}")
+  end
+
   def create_boss_message
-    boss_message&.unpin
+    unpin_boss_message
 
     @boss_message = channel.send_message(generate_boss_message)
     @boss_message.pin
@@ -242,7 +253,7 @@ class BossTracker
 
   def clear_boss_message
     return unless boss_message
-    boss_message.unpin
+    unpin_boss_message
     @boss_message = nil
     clan.update(boss_message_id: nil)
   end
